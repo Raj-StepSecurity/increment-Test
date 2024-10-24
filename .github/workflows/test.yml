@@ -1,0 +1,19 @@
+name: Test Increment
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - main 
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.REPO_ACCESS_TOKEN }}
+    - name: Perform test
+      run: echo "Test logic here"
