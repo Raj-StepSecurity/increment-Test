@@ -1,0 +1,40 @@
+name: "Test Increment Action"
+
+on:
+  workflow_dispatch:
+    inputs:
+      variable-name:
+        description: "Name of the variable to increment"
+        required: true
+        default: "MY_VARIABLE"
+      increment-amount:
+        description: "Amount to increment by"
+        required: false
+        default: 1
+      action-tag:
+        description: "Tag for the action"
+        required: true
+        default: "main"
+
+jobs:
+  increment-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Test increment action
+        id: increment
+        uses: step-security/dynamic-uses@v1
+        with:
+          uses: step-security/increment@${{ github.event.inputs.action-tag }}
+          with: >
+            {
+              "name": "${{ github.event.inputs.variable-name }}",
+              "amount": "${{ github.event.inputs.increment-amount }}",
+              "token": "${{ secrets.REPO_ACCESS_TOKEN }}"
+            }
+
+      - name: Output incremented value
+        run: |
+          echo "New value: ${{ steps.increment.outputs.value }}"
