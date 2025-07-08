@@ -1,0 +1,205 @@
+
+name: delete-deployment-environment
+
+on:
+  workflow_dispatch:
+    inputs:
+      action-tag:
+        description: 'Branch or tag to test'
+        required: true
+        default: 'main'
+
+env:
+  ENVIRONMENT: test
+  REF: delete-deployment-environment
+  REPO_ACCESS_TOKEN: ${{ secrets.REPO_ACCESS_TOKEN }}
+  GH_APP_ID: ${{ secrets.GH_APP_ID }}
+  GH_APP_PRIVATE_KEY: ${{ secrets.GH_APP_PRIVATE_KEY }}
+
+jobs:
+  full-cleanup:
+    name: 🧼 Full Cleanup - Delete Deployments & Environment
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create deployment
+        uses: chrnorm/deployment-action@v2
+        with:
+          token: ${{ env.REPO_ACCESS_TOKEN }}
+          environment: ${{ env.ENVIRONMENT }}
+          ref: ${{ env.REF }}
+          initial-status: success
+
+      - name: Delete deployments & environment
+        uses: step-security/delete-deployment-environment@main
+        with:
+          token: ${{ env.REPO_ACCESS_TOKEN }}
+          environment: ${{ env.ENVIRONMENT }}
+
+      - name: 🧪 Verify environment was deleted
+        run: |
+          status=$(curl -s -o /dev/null -w "%{http_code}" \
+            -H "Authorization: token ${{ env.REPO_ACCESS_TOKEN }}" \
+            -H "Accept: application/vnd.github+json" \
+            https://api.github.com/repos/${{ github.repository }}/environments/${{ env.ENVIRONMENT }})
+          if [ "$status" -eq 404 ]; then
+            echo "✅ Environment deleted"
+          else
+            echo "❌ Environment still exists (status: $status)"
+            exit 1
+          fi
+  only-remove:
+    name: 🗑️ Only Remove Deployments
+    needs: full-cleanup
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create deployment
+        uses: chrnorm/deployment-action@v2
+        with:
+          token: ${{ env.REPO_ACCESS_TOKEN }}
+          environment: ${{ env.ENVIRONMENT }}
+          ref: ${{ env.REF }}
+          initial-status: success
+
+      - name: Remove deployments only
+        uses: step-security/delete-deployment-environment@main
+        with:
+          token: ${{ env.REPO_ACCESS_TOKEN }}
+          environment: ${{ env.ENVIRONMENT }}
+          onlyRemoveDeployments: true
+
+      - name: 🧪 Verify deployments were removed
+        run: |
+          deployments=$(curl -s \
+            -H "Authorization: token ${{ env.REPO_ACCESS_TOKEN }}" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${{ github.repository }}/deployments?environment=${{ env.ENVIRONMENT }}")
+          count=$(echo "$deployments" | jq 'length')
+          if [ "$count" -eq 0 ]; then
+            echo "✅ Deployments removed"
+          else
+            echo "❌ Still $count deployments remain"
+            exit 1
+          fi
+  only-deactivate:
+    name: 🔕 Only Deactivate Deployments
+    needs: only-remove
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create deployment
+        uses: chrnorm/deployment-action@v2
+        with:
+          token: ${{ env.REPO_ACCESS_TOKEN }}
+          environment: ${{ env.ENVIRONMENT }}
+          ref: ${{ env.REF }}
+          initial-status: success
+
+      - name: Deactivate deployments only
+        uses: step-security/delete-deployment-environment@main
+        with:
+          token: ${{ env.REPO_ACCESS_TOKEN }}
+          environment: ${{ env.ENVIRONMENT }}
+          onlyDeactivateDeployments: true
+
+      - name: 🧪 Verify deployments are marked inactive
+        run: |
+          deployments=$(curl -s \
+            -H "Authorization: token ${{ env.REPO_ACCESS_TOKEN }}" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${{ github.repository }}/deployments?environment=${{ env.ENVIRONMENT }}")
+      
+          total=$(echo "$deployments" | jq 'length')
+          inactive_count=0
+      
+          for id in $(echo "$deployments" | jq -r '.[].id'); do
+            status=$(curl -s \
+              -H "Authorization: token ${{ env.REPO_ACCESS_TOKEN }}" \
+              -H "Accept: application/vnd.github+json" \
+              "https://api.github.com/repos/${{ github.repository }}/deployments/$id/statuses" | jq -r '.[0].state')
+      
+            if [ "$status" == "inactive" ]; then
+              inactive_count=$((inactive_count + 1))
+            fi
+          done
+      
+          echo "Inactive deployments: $inactive_count / $total"
+          if [ "$inactive_count" -eq "$total" ]; then
+            echo "✅ All deployments are marked as inactive"
+          else
+            echo "❌ Some deployments are not inactive"
+            exit 1
+          fi
+
+  ref-only:
+    name: 🎯 Delete Deployments by Ref Only
+    needs: only-deactivate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create deployment
+        uses: chrnorm/deployment-action@v2
+        with:
+          token: ${{ env.REPO_ACCESS_TOKEN }}
+          environment: ${{ env.ENVIRONMENT }}
+          ref: ${{ env.REF }}
+          initial-status: success
+
+      - name: Remove deployments for a specific ref
+        uses: step-security/delete-deployment-environment@main
+        with:
+          token: ${{ env.REPO_ACCESS_TOKEN }}
+          environment: ${{ env.ENVIRONMENT }}
+          ref: ${{ env.REF }}
+          onlyRemoveDeployments: true
+
+      - name: 🧪 Verify deployments by ref are removed
+        run: |
+          deployments=$(curl -s \
+            -H "Authorization: token ${{ env.REPO_ACCESS_TOKEN }}" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${{ github.repository }}/deployments?ref=${{ env.REF }}&environment=${{ env.ENVIRONMENT }}")
+          count=$(echo "$deployments" | jq 'length')
+          if [ "$count" -eq 0 ]; then
+            echo "✅ Ref deployments removed"
+          else
+            echo "❌ Still $count deployments for ref remain"
+            exit 1
+          fi
+  github-app-cleanup:
+    name: 🛡️ Cleanup Using GitHub App Token
+    needs: ref-only
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create deployment
+        uses: chrnorm/deployment-action@v2
+        with:
+          token: ${{ env.REPO_ACCESS_TOKEN }}
+          environment: ${{ env.ENVIRONMENT }}
+          ref: ${{ env.REF }}
+          initial-status: success
+
+      - name: Generate GitHub App token
+        uses: actions/create-github-app-token@v2
+        id: get-token
+        with:
+          app-id: ${{ env.GH_APP_ID }}
+          private-key: ${{ env.GH_APP_PRIVATE_KEY }}
+
+      - name: Delete with GitHub App token
+        uses: step-security/delete-deployment-environment@main
+        with:
+          token: ${{ steps.get-token.outputs.token }}
+          environment: ${{ env.ENVIRONMENT }}
+          ref: ${{ env.REF }}
+
+      - name: 🧪 Verify deployments by ref are removed
+        run: |
+          deployments=$(curl -s \
+            -H "Authorization: token ${{ env.REPO_ACCESS_TOKEN }}" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${{ github.repository }}/deployments?ref=${{ env.REF }}&environment=${{ env.ENVIRONMENT }}")
+          count=$(echo "$deployments" | jq 'length')
+          if [ "$count" -eq 0 ]; then
+            echo "✅ Ref deployments removed"
+          else
+            echo "❌ Still $count deployments for ref remain"
+            exit 1
+          fi
