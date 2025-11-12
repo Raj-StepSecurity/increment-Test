@@ -21,6 +21,6 @@ jobs:
 
       - name: Build and push image
         run: |
-          IMAGE=ghcr.io/${{ github.repository_owner }}/workflow-playground:test
+          IMAGE=ghcr.io/${{ github.repository_owner }}/increment-Test:test
           docker build -t $IMAGE .
           docker push $IMAGE
