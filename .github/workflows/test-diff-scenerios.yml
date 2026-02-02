@@ -1,33 +1,47 @@
+
 #update this file in anyway to test
 name: test-diff-scenerios
 
-on:
+on: 
   workflow_dispatch:
 
-jobs:  
-  integration-tests:
+jobs:
+  build:
     runs-on: ubuntu-latest
+
+    # Add "id-token" with the intended permissions.
     permissions:
-      contents: write
-      actions: write
-    env:
-      INTEGRATION_TEST_WORKFLOW_FILE: "integration-tests.yml"
-      INTEGRATION_TEST_WORKFLOW_ID: 184979976 
+      contents: 'read'
+      id-token: 'write'
+
     steps:
-      - uses: actions/checkout@v4
-      - uses: step-security/action-semantic-demo@main
-        id: workflow-dispatch
-        name: "Dispatch Using workflow_dispatch Method"
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Authenticate to Google Cloud
+        id: auth
+        uses: step-security/action-semantic-demo@main
         with:
-          dispatch-method: "workflow_dispatch"
-          repo: "${{ github.event.repository.name }}"
-          owner: "${{ github.repository_owner }}"
-          ref: "refs/heads/main"
-          workflow: "${{ env.INTEGRATION_TEST_WORKFLOW_ID }}"
-          token: "${{ secrets.GITHUB_TOKEN }}"
-          workflow-inputs: |
-            {
-              "string-type": "placeholder",
-              "number-type": "1",
-              "boolean-type": "true"
-            }
+          service_account: Testing-action@balmy-ground-313307.iam.gserviceaccount.com
+          workload_identity_provider: projects/530691134020/locations/global/workloadIdentityPools/github/providers/my-repo
+
+      - name: Verify credentials file is excluded
+        run: git status
+
+      - name: Set up Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v1
+
+      - name: Verify Google Cloud Authentication
+        run: |
+          gcloud info
+          gcloud projects list
+      - name: Validate Authenticated Service Account
+        run: |
+          ACCOUNT=$(gcloud auth list --filter=status:ACTIVE --format="value(account)")
+          PROJECT_ID=$(gcloud info --format="value(config.project)")
+          echo "🔍 Checking if account '$ACCOUNT' exists in project '$PROJECT_ID'..."
+          if gcloud iam service-accounts describe "$ACCOUNT" --project="$PROJECT_ID" > /dev/null 2>&1; then
+            echo "✅ Service account exists and is valid."
+          else
+            echo "❌ Service account does not exist or access is denied."
+            exit 1
