@@ -1,0 +1,56 @@
+name: changeset-action
+
+on:
+  workflow_dispatch:
+    inputs:
+      action-tag:
+        description: "Tag/ref for the changeset action"
+        required: true
+        default: "main"
+
+jobs:
+  test-main:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@v2
+        with:
+          egress-policy: audit
+
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate changeset
+        run: |
+          mkdir -p .changeset
+          FILE=".changeset/ci-auto-main-${{ github.run_id }}.md"
+          cat > "$FILE" <<'EOF'
+          ---
+          "sut-server": patch
+          ---
+          
+          Automated CI-generated changeset for main test.
+          EOF
+
+      - name: Create PR or Release (Main)
+        uses: step-security/changeset-action@${{ inputs.action-tag }}
+        with:
+          version: npm run version
+          publish: npm run publish
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
