@@ -1,0 +1,33 @@
+#update this file in anyway to test
+name: test-diff-scenerios
+
+on:
+  workflow_dispatch:
+
+jobs:  
+  integration-tests:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: write
+    env:
+      INTEGRATION_TEST_WORKFLOW_FILE: "integration-tests.yml"
+      INTEGRATION_TEST_WORKFLOW_ID: 184979976 
+    steps:
+      - uses: actions/checkout@v4
+      - uses: step-security/action-semantic-demo@main
+        id: workflow-dispatch
+        name: "Dispatch Using workflow_dispatch Method"
+        with:
+          dispatch-method: "workflow_dispatch"
+          repo: "${{ github.event.repository.name }}"
+          owner: "${{ github.repository_owner }}"
+          ref: "refs/heads/main"
+          workflow: "${{ env.INTEGRATION_TEST_WORKFLOW_ID }}"
+          token: "${{ secrets.GITHUB_TOKEN }}"
+          workflow-inputs: |
+            {
+              "string-type": "placeholder",
+              "number-type": "1",
+              "boolean-type": "true"
+            }
