@@ -21,13 +21,10 @@ jobs:
           public-ids: |
             rqm-rn4-s5d
           datadog-site: 'us5.datadoghq.com'
-      - name: Example of using outputs
-        env:
-          RAW_RESULTS: ${{ steps.run-synthetics-tests.outputs.raw-results }}
+      - name: Print Batch URL
         run: |
           echo 'Batch URL: ${{ steps.run-synthetics-tests.outputs.batch-url }}'
-          echo 'Raw Results:'
-          echo $RAW_RESULTS | jq '.'
+
       - name: Example of parsing and using raw results with JS
         uses: actions/github-script@v6
         env:
