@@ -25,11 +25,3 @@ jobs:
         run: |
           echo 'Batch URL: ${{ steps.run-synthetics-tests.outputs.batch-url }}'
 
-      - name: Example of parsing and using raw results with JS
-        uses: actions/github-script@v6
-        env:
-          RAW_RESULTS: ${{ steps.run-synthetics-tests.outputs.raw-results }}
-        with:
-          script: |
-            const rawResults = JSON.parse(process.env.RAW_RESULTS);
-            console.log('Parsed Raw Results:', rawResults);
