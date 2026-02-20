@@ -9,4 +9,4 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: 'Setup jq'
-        uses: step-security/install-jq-action@temp/subscription
+        uses: step-security/install-jq-action@temp/subscription-2
